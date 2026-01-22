@@ -19,17 +19,12 @@ import (
 	"gvisor.dev/gvisor/pkg/waiter"
 )
 
-const (
-	defaultNIC tcpip.NICID = 1
+const defaultNIC tcpip.NICID = 1
 
-	tcpRXBufMinSize = tcp.MinBufferSize
-	tcpRXBufDefSize = tcp.DefaultSendBufferSize
-	tcpRXBufMaxSize = 8 << 20 // 8MiB
-
-	tcpTXBufMinSize = tcp.MinBufferSize
-	tcpTXBufDefSize = tcp.DefaultReceiveBufferSize
-	tcpTXBufMaxSize = 6 << 20 // 6MiB
-)
+// GVisorTun implements a bridge to connect gVisor ip stack to tun interface
+type GVisorTun interface {
+	newEndpoint() (stack.LinkEndpoint, error)
+}
 
 // stackGVisor is ip stack implemented by gVisor package
 type stackGVisor struct {
@@ -39,23 +34,6 @@ type stackGVisor struct {
 	handler     *Handler
 	stack       *stack.Stack
 	endpoint    stack.LinkEndpoint
-}
-
-// GVisorTun implements a bridge to connect gVisor ip stack to tun interface
-type GVisorTun interface {
-	newEndpoint() (stack.LinkEndpoint, error)
-}
-
-// NewStack builds new ip stack (using gVisor)
-func NewStack(ctx context.Context, options StackOptions, handler *Handler) (Stack, error) {
-	gStack := &stackGVisor{
-		ctx:         ctx,
-		tun:         options.Tun.(GVisorTun),
-		idleTimeout: options.IdleTimeout,
-		handler:     handler,
-	}
-
-	return gStack, nil
 }
 
 // Start is called by Handler to bring stack to life
@@ -201,6 +179,18 @@ func (t *stackGVisor) Close() error {
 	return nil
 }
 
+// NewStack builds new ip stack (using gVisor)
+func NewStack(ctx context.Context, options StackOptions, handler *Handler) (Stack, error) {
+	gStack := &stackGVisor{
+		ctx:         ctx,
+		tun:         options.Tun.(GVisorTun),
+		idleTimeout: options.IdleTimeout,
+		handler:     handler,
+	}
+
+	return gStack, nil
+}
+
 // createStack configure gVisor ip stack
 func createStack(ep stack.LinkEndpoint) (*stack.Stack, error) {
 	opts := stack.Options{
@@ -237,9 +227,9 @@ func createStack(ep stack.LinkEndpoint) (*stack.Stack, error) {
 	gStack.SetTransportProtocolOption(tcp.ProtocolNumber, &mOpt)
 
 	tcpRXBufOpt := tcpip.TCPReceiveBufferSizeRangeOption{
-		Min:     tcpRXBufMinSize,
-		Default: tcpRXBufDefSize,
-		Max:     tcpRXBufMaxSize,
+		Min:     tcpRecvBufMinSize,
+		Default: tcpRecvBufDefaultSize,
+		Max:     tcpRecvBufMaxSize,
 	}
 	err = gStack.SetTransportProtocolOption(tcp.ProtocolNumber, &tcpRXBufOpt)
 	if err != nil {
@@ -247,9 +237,9 @@ func createStack(ep stack.LinkEndpoint) (*stack.Stack, error) {
 	}
 
 	tcpTXBufOpt := tcpip.TCPSendBufferSizeRangeOption{
-		Min:     tcpTXBufMinSize,
-		Default: tcpTXBufDefSize,
-		Max:     tcpTXBufMaxSize,
+		Min:     tcpSendBufMinSize,
+		Default: tcpSendBufDefaultSize,
+		Max:     tcpSendBufMaxSize,
 	}
 	err = gStack.SetTransportProtocolOption(tcp.ProtocolNumber, &tcpTXBufOpt)
 	if err != nil {

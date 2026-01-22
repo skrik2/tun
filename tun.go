@@ -1,5 +1,10 @@
 package tun
 
+const (
+	DefaultIPRoute2TableIndex = 2026
+	DefaultIPRoute2RuleIndex  = 8848
+)
+
 // Tun interface implements tun interface interaction
 type Tun interface {
 	Start() error
