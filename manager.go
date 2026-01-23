@@ -19,9 +19,9 @@ type Manager interface {
 }
 
 type DefaultManager struct {
-	Tun   Tun
-	Route RouteOptions
-	Stack Stack
+	Tun        Tun
+	Redirector TrafficRedirector
+	Stack      Stack
 
 	opened bool
 }
